@@ -1,11 +1,5 @@
 {
   "records": {
-    "2026-04-04": {
-      "checked": false,
-      "note": "",
-      "timestamp": "2026-04-04T00:00:00",
-      "updated_at": null
-    },
     "2024-10-01": {
       "checked": false,
       "note": "",
@@ -3078,10 +3072,10 @@
       "timestamp": "2026-04-03T00:00:00",
       "updated_at": null
     },
-    "2026-04-05": {
+    "2026-04-04": {
       "checked": false,
       "note": "",
-      "timestamp": "2026-04-05T12:06:35.519743",
+      "timestamp": "2026-04-04T00:00:00",
       "updated_at": null
     }
   }

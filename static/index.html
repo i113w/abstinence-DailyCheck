@@ -12,151 +12,142 @@
 
   <script>
     tailwind.config = {
-      theme: {
-        extend: {
-          colors: { primary: '#10b981' },
-          screens: { 'xs': '480px' }
-        }
-      }
+      theme: { extend: { colors: { primary: '#10b981' } } }
     }
   </script>
 
   <style>
     [v-cloak] { display: none !important; }
 
-    /* ── 动画 ── */
     .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
     .fade-enter-from, .fade-leave-to { opacity: 0; }
     .slide-up-enter-active, .slide-up-leave-active { transition: all 0.3s ease; }
     .slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(16px); }
 
-    @keyframes pulse-soft {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.04); }
-    }
+    @keyframes pulse-soft { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
     .streak-pulse { animation: pulse-soft 2.4s ease-in-out infinite; }
 
-    /* ── 滚动条 ── */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* ── 桌面端侧边栏导航链接 ── */
+    /* ── Desktop sidebar ── */
     .sidebar-link {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.6rem 1rem;
-      border-radius: 0.75rem;
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: #6b7280;
-      transition: background 0.15s, color 0.15s;
-      cursor: pointer;
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.6rem 1rem; border-radius: 0.75rem;
+      font-size: 0.875rem; font-weight: 600; color: #6b7280;
+      transition: background 0.15s, color 0.15s; cursor: pointer;
     }
     .sidebar-link:hover { background: #f3f4f6; color: #374151; }
     .sidebar-link.active { background: #ecfdf5; color: #059669; }
     .sidebar-link .icon { width: 1.25rem; text-align: center; }
 
-    /* ── 桌面端主区域不超出视口 ── */
     @media (min-width: 768px) {
-      .desktop-shell {
-        display: flex;
-        flex-direction: row;
-        height: 100vh;
-        overflow: hidden;
-      }
+      .desktop-shell { display: flex; flex-direction: row; height: 100vh; overflow: hidden; }
       .desktop-sidebar {
-        display: flex;
-        flex-direction: column;
-        width: 240px;
-        min-width: 240px;
-        height: 100vh;
-        border-right: 1px solid #f0f0f0;
-        background: #fff;
-        padding: 1.5rem 1rem;
-        gap: 0.5rem;
-        overflow-y: auto;
+        display: flex; flex-direction: column; width: 240px; min-width: 240px;
+        height: 100vh; border-right: 1px solid #f0f0f0; background: #fff;
+        padding: 1.5rem 1rem; gap: 0.5rem; overflow-y: auto;
       }
-      .desktop-main {
-        flex: 1;
-        height: 100vh;
-        overflow-y: auto;
-        background: #f9fafb;
-      }
+      .desktop-main { flex: 1; height: 100vh; overflow-y: auto; background: #f9fafb; }
     }
+
+    /* ── Heatmap cell ── */
+    .cal-cell {
+      border-radius: 3px;
+      transition: filter 0.1s, transform 0.1s;
+      flex-shrink: 0;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cal-cell.interactive:hover {
+      filter: brightness(0.82);
+      transform: scale(1.15);
+      z-index: 1;
+    }
+    /* today ring */
+    .cal-cell.is-today { box-shadow: inset 0 0 0 1.5px #059669; }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans antialiased selection:bg-emerald-200">
 
 <div id="app" v-cloak>
 
-  <!-- ═══════════════════════════════════════════
-       全局 Toast
-  ═══════════════════════════════════════════ -->
+  <!-- ════════════════════════════════
+       Heatmap Tooltip (fixed, global)
+  ════════════════════════════════════ -->
+  <div v-if="tooltip.visible"
+       class="fixed z-[9999] pointer-events-none"
+       :style="`left:${tooltip.x}px; top:${tooltip.y - 10}px; transform:translate(-50%,-100%)`">
+    <div class="bg-gray-900 text-white text-xs rounded-xl px-3 py-2.5 shadow-2xl min-w-max">
+      <p class="font-mono text-gray-400 text-[10px] mb-1">{{ tooltip.data?.date }}</p>
+      <template v-if="tooltip.data?.hasRecord">
+        <p class="font-bold leading-snug"
+           :class="tooltip.data.checked ? 'text-emerald-400' : 'text-red-400'">
+          {{ tooltip.data.checked ? '已打卡' : '已跳过' }}
+          <span class="text-orange-400 ml-1">day{{ tooltip.data.streak }}</span>
+        </p>
+        <p v-if="tooltip.data.note" class="text-gray-400 mt-1 text-[11px] italic max-w-[180px] break-words">
+          {{ tooltip.data.note }}
+        </p>
+      </template>
+      <p v-else class="text-gray-500">无记录</p>
+      <!-- Arrow -->
+      <div class="absolute left-1/2 -translate-x-1/2 bottom-0 translate-y-full"
+           style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid #111827;"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════
+       Global Toast
+  ════════════════════════════════════ -->
   <transition name="slide-up">
     <div v-if="toast.visible"
-         :class="{'bg-emerald-600': toast.type==='success', 'bg-red-500': toast.type==='error', 'bg-gray-800': toast.type==='info'}"
+         :class="{'bg-emerald-600':toast.type==='success','bg-red-500':toast.type==='error','bg-gray-800':toast.type==='info'}"
          class="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full text-white text-sm shadow-xl flex items-center gap-2 max-w-[90vw]">
-      <i class="fas" :class="{'fa-check-circle': toast.type==='success', 'fa-exclamation-circle': toast.type==='error', 'fa-info-circle': toast.type==='info'}"></i>
+      <i class="fas" :class="{'fa-check-circle':toast.type==='success','fa-exclamation-circle':toast.type==='error','fa-info-circle':toast.type==='info'}"></i>
       {{ toast.message }}
     </div>
   </transition>
 
-  <!-- ═══════════════════════════════════════════
-       外层壳：移动端 flex-col，桌面端 flex-row
-  ═══════════════════════════════════════════ -->
+  <!-- ════════════════════════════════
+       App Shell
+  ════════════════════════════════════ -->
   <div class="desktop-shell max-w-md mx-auto md:max-w-none md:mx-0 min-h-screen bg-gray-50 md:bg-transparent flex flex-col md:flex-row shadow-xl md:shadow-none relative overflow-hidden md:overflow-visible">
 
-    <!-- ───────────────────────────────────────
-         桌面端侧边栏（md+ 显示，移动端隐藏）
-    ─────────────────────────────────────────── -->
+    <!-- ── Desktop Sidebar ── -->
     <aside class="hidden md:flex desktop-sidebar flex-col">
-
-      <!-- Logo -->
       <div class="px-1 mb-4">
         <h1 class="text-xl font-black text-gray-800 flex items-center gap-2">
           <i class="fa-solid fa-seedling text-emerald-500"></i> DailyCheck
         </h1>
         <p class="text-xs text-gray-400 mt-1 ml-0.5">{{ todayFormatted }}</p>
       </div>
-
-      <!-- 桌面端连签卡片 -->
-      <div :class="status?.streak > 0
-              ? 'from-orange-400 to-rose-500 shadow-orange-400/25'
-              : 'from-slate-400 to-slate-500 shadow-slate-400/25'"
+      <div :class="status?.streak > 0 ? 'from-orange-400 to-rose-500 shadow-orange-400/25' : 'from-slate-400 to-slate-500 shadow-slate-400/25'"
            class="bg-gradient-to-br rounded-2xl p-5 text-white text-center shadow-md mb-4 relative overflow-hidden">
         <i class="fas fa-fire absolute -right-4 -top-4 text-7xl opacity-10"></i>
         <p class="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Current Streak</p>
-        <div class="text-4xl font-black tracking-tighter streak-pulse drop-shadow">
-          {{ status?.day_label || 'day0' }}
-        </div>
-        <p class="mt-2 text-white/80 text-[11px] leading-snug">
-          {{ status?.streak > 0 ? '保持得不错，继续努力！🔥' : '种一棵树最好的时机是现在 🌱' }}
-        </p>
+        <div class="text-4xl font-black tracking-tighter streak-pulse drop-shadow">{{ status?.day_label || 'day0' }}</div>
+        <p class="mt-2 text-white/80 text-[11px] leading-snug">{{ status?.streak > 0 ? '保持得不错，继续努力！🔥' : '种一棵树最好的时机是现在 🌱' }}</p>
       </div>
-
-      <!-- 导航链接 -->
       <nav class="flex flex-col gap-1">
-        <div class="sidebar-link" :class="{ active: currentTab==='home' }" @click="switchTab('home')">
+        <div class="sidebar-link" :class="{active:currentTab==='home'}" @click="switchTab('home')">
           <i class="fas fa-home icon"></i> 今日打卡
         </div>
-        <div class="sidebar-link" :class="{ active: currentTab==='history' }" @click="switchTab('history')">
+        <div class="sidebar-link" :class="{active:currentTab==='history'}" @click="switchTab('history')">
           <i class="fas fa-list-ul icon"></i> 历史足迹
         </div>
-        <div class="sidebar-link" :class="{ active: currentTab==='data' }" @click="switchTab('data')">
+        <div class="sidebar-link" :class="{active:currentTab==='data'}" @click="switchTab('data')">
           <i class="fas fa-database icon"></i> 数据管理
         </div>
       </nav>
-
-      <!-- 底部版权 -->
       <div class="mt-auto pt-4 text-center">
         <p class="text-[11px] text-gray-300">DailyCheck · 本地运行</p>
       </div>
     </aside>
 
-    <!-- ───────────────────────────────────────
-         移动端顶栏（md 以下显示）
-    ─────────────────────────────────────────── -->
+    <!-- ── Mobile Header ── -->
     <header class="md:hidden pt-8 pb-4 px-6 bg-white shrink-0">
       <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
         <i class="fa-solid fa-seedling text-emerald-500"></i> DailyCheck
@@ -164,50 +155,33 @@
       <p class="text-sm text-gray-500 mt-1">{{ todayFormatted }}</p>
     </header>
 
-    <!-- ───────────────────────────────────────
-         主内容区
-    ─────────────────────────────────────────── -->
+    <!-- ── Main Content ── -->
     <main class="desktop-main flex-1 overflow-y-auto no-scrollbar relative pb-24 md:pb-0">
-
-      <!-- 加载遮罩 -->
       <div v-if="loading" class="absolute inset-0 bg-white/60 z-10 flex justify-center items-center backdrop-blur-sm">
         <i class="fas fa-spinner fa-spin text-3xl text-emerald-500"></i>
       </div>
 
-      <!-- 内容内边距包装 -->
       <div class="p-6 md:p-8 md:max-w-5xl">
 
-        <!-- ═══ 视图: 主页 ═══ -->
+        <!-- ══════════ HOME ══════════ -->
         <transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'home'" key="home">
-
-          <!-- 桌面端双栏 / 移动端单栏 -->
+        <div v-if="currentTab==='home'" key="home">
           <div class="flex flex-col md:grid md:grid-cols-2 md:gap-8 gap-6">
-
-            <!-- 左栏 -->
             <div class="flex flex-col gap-6">
-
-              <!-- 移动端专属连签卡片（桌面端已在侧边栏） -->
+              <!-- Mobile streak card -->
               <div class="md:hidden"
                    :class="status?.streak > 0 ? 'bg-gradient-to-br from-orange-400 to-rose-500 shadow-orange-500/30' : 'bg-gradient-to-br from-slate-400 to-slate-500 shadow-slate-500/30'"
-                   class="rounded-3xl p-8 text-white text-center shadow-lg relative overflow-hidden transition-all duration-500">
+                   class="rounded-3xl p-8 text-white text-center shadow-lg relative overflow-hidden">
                 <i class="fas fa-fire absolute -right-6 -top-6 text-9xl opacity-10"></i>
                 <p class="text-white/80 text-sm font-medium uppercase tracking-wider mb-2">Current Streak</p>
-                <div class="text-6xl font-black tracking-tighter streak-pulse drop-shadow-md">
-                  {{ status?.day_label || 'day0' }}
-                </div>
-                <p class="mt-3 text-white/90 text-sm">
-                  {{ status?.streak > 0 ? '保持得不错，继续努力！ 🔥' : '种一棵树最好的时间是十年前，其次是现在 🌱' }}
-                </p>
+                <div class="text-6xl font-black tracking-tighter streak-pulse drop-shadow-md">{{ status?.day_label || 'day0' }}</div>
+                <p class="mt-3 text-white/90 text-sm">{{ status?.streak > 0 ? '保持得不错，继续努力！ 🔥' : '种一棵树最好的时间是十年前，其次是现在 🌱' }}</p>
               </div>
-
-              <!-- 今日操作区 -->
+              <!-- Today action -->
               <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 class="text-base font-bold mb-4 flex items-center gap-2 text-gray-700">
                   <i class="fas fa-calendar-day text-gray-300"></i> 今日打卡
                 </h2>
-
-                <!-- 未操作 -->
                 <div v-if="!status?.today_record" class="space-y-4">
                   <input v-model="todayNote" type="text" placeholder="写点什么备注吧（可选）..."
                          class="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-400 outline-none transition-all">
@@ -220,48 +194,36 @@
                     </button>
                   </div>
                 </div>
-
-                <!-- 已操作 -->
                 <div v-else class="text-center py-2">
                   <div class="inline-flex items-center justify-center w-14 h-14 rounded-full mb-3"
                        :class="status.today_record.checked ? 'bg-emerald-100 text-emerald-500' : 'bg-gray-100 text-gray-500'">
                     <i class="fas fa-xl" :class="status.today_record.checked ? 'fa-check' : 'fa-forward'"></i>
                   </div>
-                  <h3 class="font-bold text-gray-800">
-                    今日已{{ status.today_record.checked ? '打卡' : '跳过' }}
-                  </h3>
-                  <p v-if="status.today_record.note" class="text-gray-400 text-sm mt-1.5 italic">
-                    "{{ status.today_record.note }}"
-                  </p>
-                  <button @click="undoToday" class="mt-4 text-xs text-gray-400 hover:text-red-500 underline decoration-dashed transition-colors">
-                    撤销 / 重置今日记录
-                  </button>
+                  <h3 class="font-bold text-gray-800">今日已{{ status.today_record.checked ? '打卡' : '跳过' }}</h3>
+                  <p v-if="status.today_record.note" class="text-gray-400 text-sm mt-1.5 italic">"{{ status.today_record.note }}"</p>
+                  <button @click="undoToday" class="mt-4 text-xs text-gray-400 hover:text-red-500 underline decoration-dashed transition-colors">撤销 / 重置今日记录</button>
                 </div>
               </div>
             </div>
 
-            <!-- 右栏：近期足迹 -->
+            <!-- Recent records panel -->
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <h2 class="text-base font-bold mb-4 flex items-center gap-2 text-gray-700">
                 <i class="fas fa-shoe-prints text-gray-300"></i> 近期足迹
               </h2>
-
-              <div v-if="recentRecords.length === 0" class="text-center py-6 text-gray-300 text-sm">
+              <div v-if="recentRecords.length===0" class="text-center py-6 text-gray-300 text-sm">
                 <i class="fas fa-inbox text-2xl mb-2 block"></i> 暂无记录
               </div>
-
-              <!-- 移动端：横向滚动方块 -->
+              <!-- mobile: horizontal squares -->
               <div class="md:hidden flex flex-row-reverse justify-end gap-2 overflow-x-auto pb-2 no-scrollbar">
                 <div v-for="rec in recentRecords" :key="rec.date"
                      class="shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-medium border"
-                     :class="rec.checked ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-gray-50 border-gray-200 text-gray-400'"
-                     :title="rec.date">
+                     :class="rec.checked ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-gray-50 border-gray-200 text-gray-400'">
                   <span>{{ formatShortDate(rec.date) }}</span>
                   <i class="fas text-[10px] mt-1" :class="rec.checked ? 'fa-check' : 'fa-minus'"></i>
                 </div>
               </div>
-
-              <!-- 桌面端：纵向列表 -->
+              <!-- desktop: vertical list -->
               <div class="hidden md:flex flex-col gap-2">
                 <div v-for="rec in recentRecords" :key="rec.date"
                      class="flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors"
@@ -274,10 +236,7 @@
                     <p class="text-sm font-semibold text-gray-700">{{ rec.date }}</p>
                     <p v-if="rec.note" class="text-xs text-gray-400 truncate">{{ rec.note }}</p>
                   </div>
-                  <span class="text-xs font-bold shrink-0"
-                        :class="rec.checked ? 'text-orange-400' : 'text-gray-300'">
-                    day{{ rec.streak }}
-                  </span>
+                  <span class="text-xs font-bold shrink-0" :class="rec.checked ? 'text-orange-400' : 'text-gray-300'">day{{ rec.streak }}</span>
                 </div>
               </div>
             </div>
@@ -285,165 +244,315 @@
         </div>
         </transition>
 
-        <!-- ═══ 视图: 历史记录 ═══ -->
+        <!-- ══════════ HISTORY ══════════ -->
         <transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'history'" key="history">
+        <div v-if="currentTab==='history'" key="history">
 
-          <div class="flex justify-between items-center mb-5">
-            <h2 class="text-lg font-bold text-gray-800">全部足迹</h2>
-            <span class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full font-medium">
-              共 {{ historyList.length }} 条记录
-            </span>
+          <!-- Header: title + record count + view toggle -->
+          <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+            <div class="flex items-center gap-3">
+              <h2 class="text-lg font-bold text-gray-800">全部足迹</h2>
+              <span v-if="historyView==='list'" class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full font-medium">
+                共 {{ historyList.length }} 条
+              </span>
+            </div>
+            <!-- List / Calendar toggle -->
+            <div class="flex bg-gray-100 p-0.5 rounded-xl gap-0.5">
+              <button @click="historyView='list'"
+                      :class="historyView==='list' ? 'bg-white shadow-sm text-gray-700' : 'text-gray-400 hover:text-gray-600'"
+                      class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5">
+                <i class="fas fa-list text-[10px]"></i> 列表
+              </button>
+              <button @click="historyView='calendar'"
+                      :class="historyView==='calendar' ? 'bg-white shadow-sm text-gray-700' : 'text-gray-400 hover:text-gray-600'"
+                      class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5">
+                <i class="fas fa-table-cells text-[10px]"></i> 日历
+              </button>
+            </div>
           </div>
 
-          <div v-if="historyList.length === 0" class="text-center text-gray-300 py-16">
-            <i class="fas fa-inbox fa-3x mb-3 block"></i>
-            <p class="text-sm">暂无历史记录</p>
-          </div>
+          <!-- ─── LIST VIEW ─── -->
+          <div v-if="historyView==='list'">
+            <div v-if="historyList.length===0" class="text-center text-gray-300 py-16">
+              <i class="fas fa-inbox fa-3x mb-3 block"></i>
+              <p class="text-sm">暂无历史记录</p>
+            </div>
 
-          <!-- 移动端：卡片列表 -->
-          <div class="md:hidden flex flex-col gap-3">
-            <div v-for="record in historyList" :key="record.date"
-                 class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-              <div v-if="editingDate !== record.date" class="flex items-start justify-between">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                       :class="record.checked ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'">
-                    <i class="fas" :class="record.checked ? 'fa-check' : 'fa-forward'"></i>
+            <!-- Mobile cards -->
+            <div class="md:hidden flex flex-col gap-3">
+              <div v-for="record in historyList" :key="record.date" class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <div v-if="editingDate!==record.date" class="flex items-start justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                         :class="record.checked ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'">
+                      <i class="fas" :class="record.checked ? 'fa-check' : 'fa-forward'"></i>
+                    </div>
+                    <div>
+                      <h4 class="font-bold text-gray-800 text-sm">{{ record.date }}</h4>
+                      <p class="text-xs text-orange-400 font-semibold">Day {{ record.streak }}</p>
+                      <p v-if="record.note" class="text-sm text-gray-500 mt-1">{{ record.note }}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 class="font-bold text-gray-800 text-sm">{{ record.date }}</h4>
-                    <p class="text-xs text-orange-400 font-semibold">Day {{ record.streak }}</p>
-                    <p v-if="record.note" class="text-sm text-gray-500 mt-1">{{ record.note }}</p>
+                  <button @click="startEdit(record)" class="text-gray-300 hover:text-emerald-500 p-2 transition-colors"><i class="fas fa-pen"></i></button>
+                </div>
+                <div v-else class="space-y-3 bg-gray-50 p-3 -m-1 rounded-xl">
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm font-bold text-gray-700">编辑 {{ record.date }}</span>
+                    <button @click="deleteRecord(record.date)" class="text-xs text-red-400 hover:text-red-600"><i class="fas fa-trash"></i> 删除</button>
+                  </div>
+                  <div class="flex gap-2">
+                    <select v-model="editData.checked" class="bg-white border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
+                      <option :value="true">已打卡</option>
+                      <option :value="false">已跳过</option>
+                    </select>
+                    <input v-model="editData.note" type="text" placeholder="备注" class="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
+                  </div>
+                  <div class="flex gap-2 justify-end">
+                    <button @click="editingDate=null" class="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">取消</button>
+                    <button @click="saveEdit(record.date)" class="px-3 py-1.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors">保存</button>
                   </div>
                 </div>
-                <button @click="startEdit(record)" class="text-gray-300 hover:text-emerald-500 p-2 transition-colors">
-                  <i class="fas fa-pen"></i>
+              </div>
+            </div>
+
+            <!-- Desktop table -->
+            <div class="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
+                    <th class="text-left px-5 py-3 font-semibold">日期</th>
+                    <th class="text-left px-5 py-3 font-semibold">状态</th>
+                    <th class="text-left px-5 py-3 font-semibold">连签</th>
+                    <th class="text-left px-5 py-3 font-semibold">备注</th>
+                    <th class="text-right px-5 py-3 font-semibold">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-for="record in historyList" :key="record.date">
+                    <tr v-if="editingDate!==record.date" class="border-b border-gray-50 hover:bg-gray-50/70 transition-colors group">
+                      <td class="px-5 py-3.5 font-mono text-gray-600 text-[13px]">{{ record.date }}</td>
+                      <td class="px-5 py-3.5">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                              :class="record.checked ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'">
+                          <i class="fas text-[10px]" :class="record.checked ? 'fa-check' : 'fa-forward'"></i>
+                          {{ record.checked ? '已打卡' : '已跳过' }}
+                        </span>
+                      </td>
+                      <td class="px-5 py-3.5 font-bold text-orange-400 text-[13px]">day{{ record.streak }}</td>
+                      <td class="px-5 py-3.5 text-gray-400 max-w-xs truncate">{{ record.note || '—' }}</td>
+                      <td class="px-5 py-3.5 text-right">
+                        <button @click="startEdit(record)"
+                                class="text-gray-300 hover:text-emerald-500 p-1.5 rounded-lg hover:bg-emerald-50 transition-all opacity-0 group-hover:opacity-100">
+                          <i class="fas fa-pen text-xs"></i>
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-else class="bg-emerald-50/50">
+                      <td class="px-5 py-3 font-mono text-gray-600 text-[13px]">{{ record.date }}</td>
+                      <td class="px-5 py-3">
+                        <select v-model="editData.checked" class="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-emerald-400">
+                          <option :value="true">已打卡</option>
+                          <option :value="false">已跳过</option>
+                        </select>
+                      </td>
+                      <td class="px-5 py-3 text-gray-300 text-sm">—</td>
+                      <td class="px-5 py-3">
+                        <input v-model="editData.note" type="text" placeholder="备注..."
+                               class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
+                      </td>
+                      <td class="px-5 py-3 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                          <button @click="deleteRecord(record.date)" class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"><i class="fas fa-trash"></i></button>
+                          <button @click="editingDate=null" class="text-xs text-gray-500 px-2.5 py-1 rounded-lg hover:bg-gray-100 transition-colors">取消</button>
+                          <button @click="saveEdit(record.date)" class="text-xs bg-emerald-500 text-white px-3 py-1 rounded-lg hover:bg-emerald-600 transition-colors font-semibold">保存</button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ─── CALENDAR VIEW ─── -->
+          <div v-if="historyView==='calendar'">
+
+            <!-- Controls bar -->
+            <div class="flex items-center flex-wrap gap-2 mb-4">
+              <!-- Mode tabs -->
+              <div class="flex bg-gray-100 p-0.5 rounded-xl gap-0.5">
+                <button v-for="m in [{k:'year',l:'按年'},{k:'month',l:'按月'},{k:'custom',l:'自定义'}]" :key="m.k"
+                        @click="calMode=m.k"
+                        :class="calMode===m.k ? 'bg-white shadow-sm text-gray-700' : 'text-gray-400 hover:text-gray-600'"
+                        class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all">
+                  {{ m.l }}
                 </button>
               </div>
-              <div v-else class="space-y-3 bg-gray-50 p-3 -m-1 rounded-xl">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm font-bold text-gray-700">编辑 {{ record.date }}</span>
-                  <button @click="deleteRecord(record.date)" class="text-xs text-red-400 hover:text-red-600">
-                    <i class="fas fa-trash"></i> 删除
-                  </button>
+
+              <!-- Year selector -->
+              <select v-if="calMode!=='custom'" v-model.number="calYear"
+                      class="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-400 font-medium">
+                <option v-for="y in availableYears" :key="y" :value="y">{{ y }}年</option>
+              </select>
+
+              <!-- Month selector -->
+              <select v-if="calMode==='month'" v-model.number="calMonth"
+                      class="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-400 font-medium">
+                <option v-for="m in 12" :key="m" :value="m">{{ m }}月</option>
+              </select>
+
+              <!-- Custom date range -->
+              <template v-if="calMode==='custom'">
+                <input type="date" v-model="calCustomStart"
+                       class="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
+                <span class="text-gray-400 text-sm font-medium">至</span>
+                <input type="date" v-model="calCustomEnd"
+                       class="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
+              </template>
+
+              <!-- 周一起始 toggle (year/month only) -->
+              <label v-if="calMode!=='custom'" class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none ml-1">
+                <input type="checkbox" v-model="calMonStart" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer">
+                周一起始
+              </label>
+
+              <!-- Stats badge -->
+              <div v-if="calStatsText" class="ml-auto text-xs font-semibold bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                {{ calStatsText }}
+              </div>
+            </div>
+
+            <!-- Calendar card -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+
+              <!-- ── CUSTOM RANGE: auto-fill grid (no week alignment) ── -->
+              <template v-if="calMode==='custom'">
+                <div v-if="customDays.length===0" class="text-center text-gray-300 py-10 text-sm">
+                  <i class="fas fa-calendar-xmark text-3xl mb-3 block"></i>
+                  {{ (!calCustomStart||!calCustomEnd) ? '请选择起止日期' : (calCustomStart>calCustomEnd ? '开始日期不能晚于结束日期' : '该时间段暂无数据') }}
                 </div>
-                <div class="flex gap-2">
-                  <select v-model="editData.checked" class="bg-white border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
-                    <option :value="true">已打卡</option>
-                    <option :value="false">已跳过</option>
-                  </select>
-                  <input v-model="editData.note" type="text" placeholder="备注" class="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
+                <div v-else ref="calContainerRef" class="select-none">
+                  <div class="grid"
+                       :style="`grid-template-columns:repeat(auto-fill,minmax(${customCellSize}px,${customCellSize}px));gap:${CAL_GAP}px`">
+                    <div v-for="day in customDays" :key="day.date"
+                         class="cal-cell interactive"
+                         :class="{'is-today': day.date===todayStr}"
+                         :style="`width:${customCellSize}px;height:${customCellSize}px;background:${getCellColor(day)}`"
+                         @mouseenter="e=>showTooltip(e,day)"
+                         @mouseleave="hideTooltip"
+                         @mousemove="e=>moveTooltip(e)">
+                    </div>
+                  </div>
+                  <p class="text-xs text-gray-400 mt-3">{{ customDays.length }} 天 · 共 {{ customCheckedCount }} 天已打卡</p>
                 </div>
-                <div class="flex gap-2 justify-end">
-                  <button @click="editingDate = null" class="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">取消</button>
-                  <button @click="saveEdit(record.date)" class="px-3 py-1.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors">保存</button>
+              </template>
+
+              <!-- ── YEAR / MONTH: week-column grid ── -->
+              <template v-else>
+                <div v-if="calendarWeeks.length===0" class="text-center text-gray-300 py-10 text-sm">
+                  <i class="fas fa-calendar-xmark text-3xl mb-3 block"></i>
+                  该时间段暂无数据
                 </div>
+
+                <div v-else ref="calContainerRef" class="overflow-x-auto pb-1 select-none">
+
+                  <!-- Month labels row -->
+                  <div class="relative flex-shrink-0"
+                       :style="`margin-left:${CAL_LABEL_W + 6}px; height:20px; margin-bottom:5px; min-width:${calendarWeeks.length*(calCellSize+CAL_GAP)-CAL_GAP}px`">
+                    <span v-for="ml in calMonthLabels" :key="ml.colIdx"
+                          class="absolute text-[10px] text-gray-400 font-semibold whitespace-nowrap"
+                          :style="`left:${ml.colIdx*(calCellSize+CAL_GAP)}px`">
+                      {{ ml.text }}
+                    </span>
+                  </div>
+
+                  <!-- Day-label column + cell grid -->
+                  <div class="flex items-start">
+                    <!-- Day-of-week labels -->
+                    <div class="shrink-0 flex flex-col"
+                         :style="`gap:${CAL_GAP}px; width:${CAL_LABEL_W}px; margin-right:6px;`">
+                      <div v-for="(lbl,i) in calDayLabels" :key="i"
+                           class="flex items-center justify-end text-[10px] text-gray-400 font-medium"
+                           :style="`height:${calCellSize}px;`">
+                        {{ lbl }}
+                      </div>
+                    </div>
+
+                    <!-- Heatmap grid -->
+                    <div class="grid flex-shrink-0"
+                         :style="`
+                           grid-template-rows: repeat(7, ${calCellSize}px);
+                           grid-auto-flow: column;
+                           grid-auto-columns: ${calCellSize}px;
+                           gap: ${CAL_GAP}px;
+                         `">
+                      <div v-for="day in calendarDays" :key="day.date"
+                           class="cal-cell"
+                           :class="{
+                             'interactive': day.inRange,
+                             'is-today': day.date === todayStr
+                           }"
+                           :style="`background:${getCellColor(day)};`"
+                           @mouseenter="e => showTooltip(e, day)"
+                           @mouseleave="hideTooltip"
+                           @mousemove="e => moveTooltip(e)">
+                        <!-- Day number (month mode only, when cell is big enough) -->
+                        <span v-if="calMode==='month' && day.inRange && calCellSize>=20"
+                              class="text-[10px] font-medium pointer-events-none select-none leading-none"
+                              :style="day.streak>=7?'color:rgba(255,255,255,0.88)':'color:#6b7280'">
+                          {{ parseInt(day.date.slice(8)) }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Legend -->
+              <div class="flex items-center gap-1.5 mt-4 justify-end text-[11px] text-gray-400 flex-wrap">
+                <span>少</span>
+                <div class="w-3 h-3 rounded-sm" style="background:#e2e8f0" title="无记录"></div>
+                <div class="w-3 h-3 rounded-sm" style="background:#d1fae5" title="day 1–2"></div>
+                <div class="w-3 h-3 rounded-sm" style="background:#6ee7b7" title="day 3–6"></div>
+                <div class="w-3 h-3 rounded-sm" style="background:#34d399" title="day 7–13"></div>
+                <div class="w-3 h-3 rounded-sm" style="background:#10b981" title="day 14–29"></div>
+                <div class="w-3 h-3 rounded-sm" style="background:#065f46" title="day 30+"></div>
+                <span>多</span>
+                <span class="mx-1.5 text-gray-200">|</span>
+                <div class="w-3 h-3 rounded-sm" style="background:#fecaca"></div>
+                <span>已跳过</span>
+                <span class="mx-1.5 text-gray-200">|</span>
+                <div class="w-3 h-3 rounded-sm ring-1 ring-emerald-500 ring-inset" style="background:#e2e8f0"></div>
+                <span>今日</span>
               </div>
             </div>
           </div>
 
-          <!-- 桌面端：表格布局 -->
-          <div class="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
-                  <th class="text-left px-5 py-3 font-semibold">日期</th>
-                  <th class="text-left px-5 py-3 font-semibold">状态</th>
-                  <th class="text-left px-5 py-3 font-semibold">连签</th>
-                  <th class="text-left px-5 py-3 font-semibold">备注</th>
-                  <th class="text-right px-5 py-3 font-semibold">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template v-for="record in historyList" :key="record.date">
-                  <!-- 浏览行 -->
-                  <tr v-if="editingDate !== record.date"
-                      class="border-b border-gray-50 hover:bg-gray-50/70 transition-colors group">
-                    <td class="px-5 py-3.5 font-mono text-gray-600 text-[13px]">{{ record.date }}</td>
-                    <td class="px-5 py-3.5">
-                      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
-                            :class="record.checked ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'">
-                        <i class="fas text-[10px]" :class="record.checked ? 'fa-check' : 'fa-forward'"></i>
-                        {{ record.checked ? '已打卡' : '已跳过' }}
-                      </span>
-                    </td>
-                    <td class="px-5 py-3.5 font-bold text-orange-400 text-[13px]">day{{ record.streak }}</td>
-                    <td class="px-5 py-3.5 text-gray-400 max-w-xs truncate">{{ record.note || '—' }}</td>
-                    <td class="px-5 py-3.5 text-right">
-                      <button @click="startEdit(record)"
-                              class="text-gray-300 hover:text-emerald-500 p-1.5 rounded-lg hover:bg-emerald-50 transition-all opacity-0 group-hover:opacity-100">
-                        <i class="fas fa-pen text-xs"></i>
-                      </button>
-                    </td>
-                  </tr>
-                  <!-- 编辑行 -->
-                  <tr v-else class="bg-emerald-50/50">
-                    <td class="px-5 py-3 font-mono text-gray-600 text-[13px]">{{ record.date }}</td>
-                    <td class="px-5 py-3">
-                      <select v-model="editData.checked"
-                              class="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-emerald-400">
-                        <option :value="true">已打卡</option>
-                        <option :value="false">已跳过</option>
-                      </select>
-                    </td>
-                    <td class="px-5 py-3 text-gray-300 text-sm">—</td>
-                    <td class="px-5 py-3" colspan="1">
-                      <input v-model="editData.note" type="text" placeholder="备注..."
-                             class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-400">
-                    </td>
-                    <td class="px-5 py-3 text-right">
-                      <div class="flex items-center justify-end gap-2">
-                        <button @click="deleteRecord(record.date)"
-                                class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">
-                          <i class="fas fa-trash"></i>
-                        </button>
-                        <button @click="editingDate = null"
-                                class="text-xs text-gray-500 px-2.5 py-1 rounded-lg hover:bg-gray-100 transition-colors">取消</button>
-                        <button @click="saveEdit(record.date)"
-                                class="text-xs bg-emerald-500 text-white px-3 py-1 rounded-lg hover:bg-emerald-600 transition-colors font-semibold">保存</button>
-                      </div>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
         </div>
         </transition>
 
-        <!-- ═══ 视图: 数据管理 ═══ -->
+        <!-- ══════════ DATA ══════════ -->
         <transition name="fade" mode="out-in">
-        <div v-if="currentTab === 'data'" key="data">
-
+        <div v-if="currentTab==='data'" key="data">
           <h2 class="text-lg font-bold text-gray-800 mb-5">数据备份与恢复</h2>
-
-          <!-- 移动端：纵向堆叠 / 桌面端：横向并排 -->
           <div class="flex flex-col md:grid md:grid-cols-2 md:gap-6 gap-5">
-
-            <!-- 导出 -->
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">
               <div class="w-12 h-12 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center mb-4">
                 <i class="fas fa-file-arrow-down text-xl"></i>
               </div>
               <h3 class="font-bold text-gray-800 mb-1.5">导出数据</h3>
               <p class="text-xs text-gray-400 mb-5 leading-relaxed">将所有打卡记录下载为 JSON 文件，保存到本地作为备份</p>
-              <button @click="exportData"
-                      class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm shadow-blue-500/20">
+              <button @click="exportData" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm shadow-blue-500/20">
                 <i class="fas fa-download mr-1.5"></i> 一键下载备份
               </button>
             </div>
-
-            <!-- 导入 -->
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center">
               <div class="w-12 h-12 bg-purple-50 text-purple-500 rounded-xl flex items-center justify-center mb-4">
                 <i class="fas fa-file-arrow-up text-xl"></i>
               </div>
               <h3 class="font-bold text-gray-800 mb-1.5">导入数据</h3>
               <p class="text-xs text-gray-400 mb-5 leading-relaxed">从之前备份的 JSON 文件中恢复打卡记录</p>
-
               <div class="w-full text-left space-y-3">
-                <!-- 文件选择 -->
                 <div class="relative w-full border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-purple-300 hover:bg-purple-50/30 transition-colors cursor-pointer">
                   <input type="file" accept=".json" @change="handleFileSelect" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                   <div v-if="!importFile">
@@ -453,33 +562,21 @@
                   <div v-else class="text-emerald-600 font-semibold text-sm flex flex-col items-center gap-1">
                     <i class="fas fa-file-check text-2xl"></i>
                     <span>{{ importFile.name }}</span>
-                    <span v-if="importPreviewCount !== null" class="text-xs text-gray-400 font-normal">
-                      包含 {{ importPreviewCount }} 条记录 · {{ importDateRange }}
-                    </span>
+                    <span v-if="importPreviewCount!==null" class="text-xs text-gray-400 font-normal">包含 {{ importPreviewCount }} 条记录 · {{ importDateRange }}</span>
                   </div>
                 </div>
-
-                <!-- 导入模式切换 -->
                 <div class="flex bg-gray-100 p-1 rounded-xl gap-1">
-                  <button @click="importMode = 'merge'"
-                          :class="importMode === 'merge' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'"
-                          class="flex-1 py-1.5 text-xs rounded-lg font-semibold transition-all">
+                  <button @click="importMode='merge'" :class="importMode==='merge' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'" class="flex-1 py-1.5 text-xs rounded-lg font-semibold transition-all">
                     <i class="fas fa-code-merge mr-1"></i> 合并记录
                   </button>
-                  <button @click="importMode = 'replace'"
-                          :class="importMode === 'replace' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'"
-                          class="flex-1 py-1.5 text-xs rounded-lg font-semibold transition-all">
+                  <button @click="importMode='replace'" :class="importMode==='replace' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'" class="flex-1 py-1.5 text-xs rounded-lg font-semibold transition-all">
                     <i class="fas fa-rotate mr-1"></i> 完全替换
                   </button>
                 </div>
-
-                <!-- 模式说明 -->
                 <p class="text-[11px] text-gray-400 text-center">
-                  {{ importMode === 'merge' ? '新数据会覆盖同一日期的旧记录，其余日期保留' : '⚠️ 将清除所有现有记录后再导入，操作不可撤销' }}
+                  {{ importMode==='merge' ? '新数据会覆盖同一日期的旧记录，其余日期保留' : '⚠️ 将清除所有现有记录后再导入，操作不可撤销' }}
                 </p>
-
-                <button @click="submitImport"
-                        :disabled="!importPayload"
+                <button @click="submitImport" :disabled="!importPayload"
                         :class="importPayload ? 'bg-purple-500 hover:bg-purple-600 shadow-purple-500/20' : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
                         class="w-full text-white py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm">
                   <i class="fas fa-upload mr-1.5"></i> 开始导入
@@ -490,38 +587,39 @@
         </div>
         </transition>
 
-      </div><!-- /内容内边距包装 -->
+      </div>
     </main>
 
-    <!-- ───────────────────────────────────────
-         移动端底部导航（md 以上隐藏）
-    ─────────────────────────────────────────── -->
+    <!-- ── Mobile bottom nav ── -->
     <nav class="md:hidden bg-white border-t border-gray-100 px-6 py-3 shrink-0 flex justify-around items-center absolute bottom-0 w-full">
       <button @click="switchTab('home')" class="flex flex-col items-center p-2 transition-colors w-16"
-              :class="currentTab === 'home' ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600'">
+              :class="currentTab==='home' ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600'">
         <i class="fas fa-home text-xl mb-1"></i>
         <span class="text-[10px] font-bold uppercase tracking-wider">Home</span>
       </button>
       <button @click="switchTab('history')" class="flex flex-col items-center p-2 transition-colors w-16"
-              :class="currentTab === 'history' ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600'">
+              :class="currentTab==='history' ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600'">
         <i class="fas fa-list text-xl mb-1"></i>
         <span class="text-[10px] font-bold uppercase tracking-wider">History</span>
       </button>
       <button @click="switchTab('data')" class="flex flex-col items-center p-2 transition-colors w-16"
-              :class="currentTab === 'data' ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600'">
+              :class="currentTab==='data' ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600'">
         <i class="fas fa-database text-xl mb-1"></i>
         <span class="text-[10px] font-bold uppercase tracking-wider">Data</span>
       </button>
     </nav>
 
-  </div><!-- /desktop-shell -->
-</div><!-- /#app -->
+  </div>
+</div>
 
 <script>
-const { createApp, ref, computed, onMounted } = Vue;
+const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 
 createApp({
   setup() {
+    /* ──────────────────────────────────────────
+       General state
+    ────────────────────────────────────────── */
     const currentTab     = ref('home');
     const loading        = ref(false);
     const status         = ref(null);
@@ -536,32 +634,288 @@ createApp({
     const toast          = ref({ visible: false, message: '', type: 'info' });
     let toastTimeout     = null;
 
-    // ── Toast ──
+    /* ──────────────────────────────────────────
+       Calendar state
+    ────────────────────────────────────────── */
+    const historyView    = ref('list');    // 'list' | 'calendar'
+    const calMode        = ref('year');   // 'year' | 'month' | 'custom'
+    const calYear        = ref(new Date().getFullYear());
+    const calMonth       = ref(new Date().getMonth() + 1);
+    const calCustomStart = ref(dayjs().subtract(89, 'day').format('YYYY-MM-DD'));
+    const calCustomEnd   = ref(dayjs().format('YYYY-MM-DD'));
+    const calMonStart    = ref(true);     // true = Monday, false = Sunday
+    const calContainerRef    = ref(null);
+    const calContainerWidth  = ref(800);  // will be measured
+    const tooltip        = ref({ visible: false, x: 0, y: 0, data: null });
+    let calResizeObs     = null;
+
+    // Calendar constants (exposed to template)
+    const CAL_GAP      = 3;
+    const CAL_LABEL_W  = 20;
+
+    /* ──────────────────────────────────────────
+       Toast
+    ────────────────────────────────────────── */
     const showToast = (msg, type = 'info') => {
       toast.value = { visible: true, message: msg, type };
       if (toastTimeout) clearTimeout(toastTimeout);
       toastTimeout = setTimeout(() => { toast.value.visible = false; }, 3000);
     };
 
-    // ── 计算属性 ──
+    /* ──────────────────────────────────────────
+       General computed
+    ────────────────────────────────────────── */
+    const todayStr = computed(() => dayjs().format('YYYY-MM-DD'));
     const todayFormatted = computed(() => dayjs().format('YYYY年MM月DD日'));
 
     const historyList = computed(() =>
       Object.values(records.value).sort((a, b) => (b.date > a.date ? 1 : -1))
     );
-
     const recentRecords = computed(() => historyList.value.slice(0, 7));
 
     const importDateRange = computed(() => {
       if (!importPayload.value) return '';
       const dates = Object.keys(importPayload.value.records || importPayload.value).sort();
-      if (dates.length === 0) return '';
+      if (!dates.length) return '';
       return `${dates[0]} ~ ${dates[dates.length - 1]}`;
     });
 
     const formatShortDate = (d) => dayjs(d).format('MM/DD');
 
-    // ── API 封装 ──
+    /* ──────────────────────────────────────────
+       Calendar computed
+    ────────────────────────────────────────── */
+    const availableYears = computed(() => {
+      const years = new Set([new Date().getFullYear()]);
+      Object.keys(records.value).forEach(d => years.add(parseInt(d.slice(0, 4))));
+      return Array.from(years).sort((a, b) => b - a);
+    });
+
+    // Day-of-week labels (reactive to Monday/Sunday toggle)
+    const calDayLabels = computed(() =>
+      calMonStart.value
+        ? ['一', '', '三', '', '五', '', '日']
+        : ['日', '', '二', '', '四', '', '六']
+    );
+
+    const calRange = computed(() => {
+      const y = calYear.value;
+      const mm = String(calMonth.value).padStart(2, '0');
+      if (calMode.value === 'year') {
+        return { start: `${y}-01-01`, end: `${y}-12-31` };
+      } else if (calMode.value === 'month') {
+        const lastDay = new Date(y, calMonth.value, 0).getDate();
+        return { start: `${y}-${mm}-01`, end: `${y}-${mm}-${String(lastDay).padStart(2, '0')}` };
+      } else {
+        return { start: calCustomStart.value, end: calCustomEnd.value };
+      }
+    });
+
+    // Stats badge text
+    const calStatsText = computed(() => {
+      const { start, end } = calRange.value;
+      if (!start || !end || start > end) return '';
+      let checked = 0, total = 0;
+      Object.entries(records.value).forEach(([date, rec]) => {
+        if (date >= start && date <= end) {
+          total++;
+          if (rec.checked) checked++;
+        }
+      });
+      return total ? `已打卡 ${checked} / ${total} 天` : '';
+    });
+
+    // Build week arrays: each week = [Mon..Sun] or [Sun..Sat], weeks = columns
+    const calendarWeeks = computed(() => {
+      const { start, end } = calRange.value;
+      if (!start || !end || start > end) return [];
+
+      const startD = dayjs(start);
+      const endD   = dayjs(end);
+
+      // Align start back to first day of week
+      const dow0 = startD.day(); // 0=Sun
+      const backDays = calMonStart.value
+        ? (dow0 === 0 ? 6 : dow0 - 1)   // Monday start
+        : dow0;                           // Sunday start
+      let cur = startD.subtract(backDays, 'day');
+
+      // Align end forward to last day of week
+      const dow1 = endD.day();
+      const fwdDays = calMonStart.value
+        ? (dow1 === 0 ? 0 : 7 - dow1)   // forward to Sunday
+        : (dow1 === 6 ? 0 : 6 - dow1);  // forward to Saturday
+      const alignedEnd = endD.add(fwdDays, 'day').format('YYYY-MM-DD');
+
+      const weeks = [];
+      while (true) {
+        const curStr = cur.format('YYYY-MM-DD');
+        if (curStr > alignedEnd) break;
+        const week = [];
+        for (let d = 0; d < 7; d++) {
+          const dateStr = cur.format('YYYY-MM-DD');
+          const inRange = dateStr >= start && dateStr <= end;
+          const rec = records.value[dateStr];
+          week.push({
+            date: dateStr,
+            inRange,
+            hasRecord: !!rec,
+            checked:   rec?.checked  ?? false,
+            streak:    rec?.streak   ?? 0,
+            note:      rec?.note     ?? ''
+          });
+          cur = cur.add(1, 'day');
+        }
+        weeks.push(week);
+      }
+      return weeks;
+    });
+
+    // Flat array for grid rendering (grid-auto-flow:column handles layout)
+    const calendarDays = computed(() => calendarWeeks.value.flat());
+
+    // Month labels: one per calendar column where the month changes
+    const calMonthLabels = computed(() => {
+      const labels = [];
+      const seen = new Set();
+      calendarWeeks.value.forEach((week, colIdx) => {
+        week.forEach(day => {
+          if (!day.inRange) return;
+          const ym = day.date.slice(0, 7);
+          if (!seen.has(ym)) {
+            seen.add(ym);
+            const m = parseInt(day.date.slice(5, 7));
+            const y = parseInt(day.date.slice(0, 4));
+            // In year view, show month only; in others show M月
+            const text = (calMode.value === 'year' && calYear.value === y)
+              ? `${m}月`
+              : `${y}/${m}月`;
+            labels.push({ colIdx, text });
+          }
+        });
+      });
+      return labels;
+    });
+
+    // Cell size: adaptive for all modes based on container width
+    const calCellSize = computed(() => {
+      const numWeeks = calendarWeeks.value.length;
+      if (!numWeeks) return 13;
+      const w = calContainerWidth.value || 700;
+      const available = w - CAL_LABEL_W - 6 - (numWeeks - 1) * CAL_GAP;
+      if (calMode.value === 'year') {
+        // Fit all 52–53 week columns within container width
+        return Math.max(9, Math.min(14, Math.floor(available / numWeeks)));
+      }
+      // Month: larger cells to show day numbers
+      return Math.max(18, Math.min(40, Math.floor(available / numWeeks)));
+    });
+
+    // Custom range: flat day list (no week-column alignment)
+    const customDays = computed(() => {
+      if (calMode.value !== 'custom') return [];
+      const { start, end } = calRange.value;
+      if (!start || !end || start > end) return [];
+      const days = [];
+      let cur = dayjs(start);
+      const endD = dayjs(end);
+      while (!cur.isAfter(endD)) {
+        const dateStr = cur.format('YYYY-MM-DD');
+        const rec = records.value[dateStr];
+        days.push({
+          date: dateStr,
+          inRange: true,
+          hasRecord: !!rec,
+          checked:  rec?.checked  ?? false,
+          streak:   rec?.streak   ?? 0,
+          note:     rec?.note     ?? ''
+        });
+        cur = cur.add(1, 'day');
+      }
+      return days;
+    });
+
+    const customCheckedCount = computed(() =>
+      customDays.value.filter(d => d.checked).length
+    );
+
+    // Custom cell size: fills container width with a roughly square-ish block layout
+    const customCellSize = computed(() => {
+      const n = customDays.value.length;
+      if (!n) return 14;
+      const w = calContainerWidth.value || 700;
+      const g = CAL_GAP;
+      const targetCols = Math.min(n, Math.ceil(Math.sqrt(n * 2)));
+      return Math.max(12, Math.min(22, Math.floor((w - (targetCols - 1) * g) / targetCols)));
+    });
+
+    // Cell background color — 6 streak levels + skipped differentiation
+    const getCellColor = (day) => {
+      if (!day.inRange)   return 'transparent';
+      if (!day.hasRecord) return '#e2e8f0';   // no record: cool gray
+      if (!day.checked)   return '#fecaca';   // skipped: soft red
+      const s = day.streak;
+      if (s <= 2)  return '#d1fae5';          // day 1–2:  emerald-100
+      if (s <= 6)  return '#6ee7b7';          // day 3–6:  emerald-300
+      if (s <= 13) return '#34d399';          // day 7–13: emerald-400
+      if (s <= 29) return '#10b981';          // day 14–29: emerald-500
+      return '#065f46';                        // day 30+:  emerald-900
+    };
+
+    /* ──────────────────────────────────────────
+       Tooltip
+    ────────────────────────────────────────── */
+    const showTooltip = (e, day) => {
+      if (!day.inRange) return;
+      tooltip.value = { visible: true, x: e.clientX, y: e.clientY, data: day };
+    };
+    const hideTooltip = () => { tooltip.value.visible = false; };
+    const moveTooltip = (e) => {
+      if (tooltip.value.visible) {
+        tooltip.value.x = e.clientX;
+        tooltip.value.y = e.clientY;
+      }
+    };
+
+    /* ──────────────────────────────────────────
+       Calendar container measurement
+    ────────────────────────────────────────── */
+    const updateCalWidth = () => {
+      const el = calContainerRef.value;
+      if (el) {
+        calContainerWidth.value = el.offsetWidth;
+        // Reconnect observer to whichever element is now in the ref
+        if (calResizeObs) {
+          calResizeObs.disconnect();
+          calResizeObs.observe(el);
+        }
+      }
+    };
+
+    watch(historyView, async (val) => {
+      if (val !== 'calendar') {
+        calResizeObs?.disconnect();
+        calResizeObs = null;
+        return;
+      }
+      await nextTick();
+      updateCalWidth();
+      if (calContainerRef.value) {
+        calResizeObs?.disconnect();
+        calResizeObs = new ResizeObserver(updateCalWidth);
+        calResizeObs.observe(calContainerRef.value);
+      }
+    });
+
+    // Re-measure when mode changes (cell size depends on container + numWeeks)
+    watch([calMode, calYear, calMonth, calCustomStart, calCustomEnd], async () => {
+      await nextTick();
+      updateCalWidth();
+    });
+
+    /* ──────────────────────────────────────────
+       API helpers
+    ────────────────────────────────────────── */
     const apiCall = async (url, options = {}) => {
       loading.value = true;
       try {
@@ -577,16 +931,20 @@ createApp({
     };
 
     const loadStatus  = async () => { try { status.value  = await apiCall('/api/status');  } catch(e){} };
-    const loadRecords = async () => { try { records.value  = await apiCall('/api/records'); } catch(e){} };
+    const loadRecords = async () => { try { records.value = await apiCall('/api/records'); } catch(e){} };
 
-    // ── 导航 ──
+    /* ──────────────────────────────────────────
+       Navigation
+    ────────────────────────────────────────── */
     const switchTab = async (tab) => {
       editingDate.value = null;
       currentTab.value = tab;
       if (tab === 'history') await loadRecords();
     };
 
-    // ── 今日操作 ──
+    /* ──────────────────────────────────────────
+       Today actions
+    ────────────────────────────────────────── */
     const doCheckIn = async () => {
       try {
         await apiCall('/api/checkin', {
@@ -596,8 +954,7 @@ createApp({
         });
         showToast('打卡成功！🎉', 'success');
         todayNote.value = '';
-        await loadStatus();
-        await loadRecords();
+        await loadStatus(); await loadRecords();
       } catch(e) {}
     };
 
@@ -611,8 +968,7 @@ createApp({
         });
         showToast('已跳过今日打卡', 'info');
         todayNote.value = '';
-        await loadStatus();
-        await loadRecords();
+        await loadStatus(); await loadRecords();
       } catch(e) {}
     };
 
@@ -622,12 +978,13 @@ createApp({
       try {
         await apiCall(`/api/records/${status.value.today}`, { method: 'DELETE' });
         showToast('今日记录已撤销', 'success');
-        await loadStatus();
-        await loadRecords();
+        await loadStatus(); await loadRecords();
       } catch(e) {}
     };
 
-    // ── 历史编辑 ──
+    /* ──────────────────────────────────────────
+       History editing
+    ────────────────────────────────────────── */
     const startEdit = (record) => {
       editingDate.value = record.date;
       editData.value = { checked: record.checked, note: record.note || '' };
@@ -642,8 +999,7 @@ createApp({
         });
         showToast('记录修改成功', 'success');
         editingDate.value = null;
-        await loadRecords();
-        await loadStatus();
+        await loadRecords(); await loadStatus();
       } catch(e) {}
     };
 
@@ -653,12 +1009,13 @@ createApp({
         await apiCall(`/api/records/${date}`, { method: 'DELETE' });
         showToast('记录已删除', 'success');
         editingDate.value = null;
-        await loadRecords();
-        await loadStatus();
+        await loadRecords(); await loadStatus();
       } catch(e) {}
     };
 
-    // ── 数据管理 ──
+    /* ──────────────────────────────────────────
+       Data management
+    ────────────────────────────────────────── */
     const exportData = () => {
       window.location.href = '/api/export';
       showToast('开始下载...', 'success');
@@ -672,15 +1029,12 @@ createApp({
       reader.onload = (e) => {
         try {
           const data = JSON.parse(e.target.result);
-          // 兼容直接是 { records: {...} } 或 { "2025-01-01": {...} } 两种格式
           const recs = data.records || data;
           importPayload.value = { records: recs };
           importPreviewCount.value = Object.keys(recs).length;
         } catch {
           showToast('无效的 JSON 文件格式', 'error');
-          importFile.value = null;
-          importPayload.value = null;
-          importPreviewCount.value = null;
+          importFile.value = null; importPayload.value = null; importPreviewCount.value = null;
         }
       };
       reader.readAsText(file);
@@ -688,8 +1042,7 @@ createApp({
 
     const submitImport = async () => {
       if (!importPayload.value) return;
-      const modeLabel = importMode.value === 'merge' ? '合并' : '完全替换';
-      if (!confirm(`将使用【${modeLabel}】模式导入 ${importPreviewCount.value} 条数据，确认继续？`)) return;
+      if (!confirm(`将使用【${importMode.value==='merge'?'合并':'完全替换'}】模式导入 ${importPreviewCount.value} 条数据，确认继续？`)) return;
       try {
         await apiCall('/api/import', {
           method: 'POST',
@@ -697,27 +1050,38 @@ createApp({
           body: JSON.stringify({ records: importPayload.value.records, mode: importMode.value })
         });
         showToast('数据导入成功！', 'success');
-        importFile.value = null;
-        importPayload.value = null;
-        importPreviewCount.value = null;
-        await loadStatus();
-        await loadRecords();
+        importFile.value = null; importPayload.value = null; importPreviewCount.value = null;
+        await loadStatus(); await loadRecords();
       } catch(e) {}
     };
 
+    /* ──────────────────────────────────────────
+       Init
+    ────────────────────────────────────────── */
     onMounted(async () => {
       await loadStatus();
       await loadRecords();
+      window.addEventListener('resize', updateCalWidth);
     });
 
     return {
-      currentTab, loading, status, toast, todayFormatted, todayNote,
-      historyList, recentRecords, editingDate, editData,
+      // general
+      currentTab, loading, status, toast, todayStr, todayFormatted,
+      todayNote, historyList, recentRecords, editingDate, editData,
       importFile, importPreviewCount, importMode, importPayload, importDateRange,
+      // methods
       switchTab, formatShortDate,
       doCheckIn, doSkip, undoToday,
       startEdit, saveEdit, deleteRecord,
-      exportData, handleFileSelect, submitImport
+      exportData, handleFileSelect, submitImport,
+      // calendar
+      historyView,
+      calMode, calYear, calMonth, calCustomStart, calCustomEnd, calMonStart,
+      calContainerRef, calendarWeeks, calendarDays, calMonthLabels,
+      calCellSize, calDayLabels, calStatsText, getCellColor, availableYears,
+      customDays, customCellSize, customCheckedCount,
+      tooltip, showTooltip, hideTooltip, moveTooltip,
+      CAL_GAP, CAL_LABEL_W,
     };
   }
 }).mount('#app');

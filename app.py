@@ -1,7 +1,7 @@
 """
 打卡应用后端 — Flask REST API
 运行方式: pip install flask flask-cors && python app.py
-访问地址: http://localhost:1130
+访问地址: http://localhost:8191
 """
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -250,5 +250,5 @@ def index():
 
 if __name__ == "__main__":
     os.makedirs("static", exist_ok=True)
-    print("打卡服务启动: http://localhost:1130")
-    app.run(debug=True, port=1130)
+    print("打卡服务启动: http://localhost:8191")
+    app.run(debug=True, port=8191)
